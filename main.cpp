@@ -33,6 +33,12 @@ int main(int argc, const char **argv) {
 
 	SDL_Window* window = SDL_CreateWindow("SDL2 + Vulkan",
 		SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, win_width, win_height, 0);
+
+	// On macOS we need to create a CALayer
+#if WIN32
+#else
+	SDL_MetalView metalView = SDL_Metal_CreateView(window);
+#endif
 	
 	{
 		uint32_t extension_count = 0;
@@ -66,6 +72,7 @@ int main(int argc, const char **argv) {
 #if WIN32
 			VK_KHR_WIN32_SURFACE_EXTENSION_NAME,
 #else
+			VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME,
 			VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME,
 			VK_EXT_METAL_SURFACE_EXTENSION_NAME,
 #endif
@@ -85,12 +92,6 @@ int main(int argc, const char **argv) {
 
 		CHECK_VULKAN(vkCreateInstance(&create_info, nullptr, &vk_instance));
 	}
-
-	// On macOS we need to create a CALayer
-#if WIN32
-#else
-	SDL_MetalView metalView = SDL_Metal_CreateView(window);
-#endif
 
 	VkSurfaceKHR vk_surface = VK_NULL_HANDLE;
 	{
