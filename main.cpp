@@ -61,17 +61,22 @@ int main(int argc, const char **argv) {
 		app_info.engineVersion = VK_MAKE_VERSION(1, 0, 0);
 		app_info.apiVersion = VK_API_VERSION_1_1;
 
-		const std::array<const char*, 2> extension_names = {
+		const std::vector<const char*> extension_names = {
 			VK_KHR_SURFACE_EXTENSION_NAME, 
 #if WIN32
 			VK_KHR_WIN32_SURFACE_EXTENSION_NAME,
 #else
+			VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME,
 			VK_EXT_METAL_SURFACE_EXTENSION_NAME,
 #endif
 		};
 
 		VkInstanceCreateInfo create_info = {};
 		create_info.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
+#ifdef WIN32
+#else
+		create_info.flags = VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR;
+#endif
 		create_info.pApplicationInfo = &app_info;
 		create_info.enabledExtensionCount = extension_names.size();
 		create_info.ppEnabledExtensionNames = extension_names.data();
