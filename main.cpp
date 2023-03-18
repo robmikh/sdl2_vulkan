@@ -18,12 +18,20 @@
 		} \
 	}
 
+inline void check_sdl(SDL_bool value)
+{
+	if (value != SDL_TRUE)
+	{
+		throw std::runtime_error(SDL_GetError());
+	}
+}
+
 int win_width = 1280;
 int win_height = 720;
 
 int main(int argc, const char **argv) {
 	SDL_SetHint(SDL_HINT_FRAMEBUFFER_ACCELERATION, "1");
-	if (SDL_Init(SDL_INIT_VIDEO/*SDL_INIT_EVERYTHING*/) != 0) {
+	if (SDL_Init(SDL_INIT_EVERYTHING) != 0) {
 		std::cerr << "Failed to init SDL: " << SDL_GetError() << "\n";
 		return -1;
 	}
@@ -34,10 +42,16 @@ int main(int argc, const char **argv) {
 	// Make the Vulkan Instance
 	VkInstance vk_instance = VK_NULL_HANDLE;
 	{
-		uint32_t extension_count = 0;
-		const char* extension_names[64];
-		extension_names[extension_count++] = VK_KHR_SURFACE_EXTENSION_NAME;
-		extension_names[extension_count++] = VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME;
+		uint32_t numRequiredExtensions = 0;
+		check_sdl(SDL_Vulkan_GetInstanceExtensions(window, &numRequiredExtensions, nullptr));
+
+		std::vector<const char*> extension_names(static_cast<size_t>(numRequiredExtensions), nullptr);
+
+		check_sdl(SDL_Vulkan_GetInstanceExtensions(window, &numRequiredExtensions, extension_names.data()));
+
+		extension_names.push_back(VK_KHR_SURFACE_EXTENSION_NAME);
+		extension_names.push_back(VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME);
+		uint32_t extension_count = static_cast<uint32_t>(extension_names.size());
 
 		const VkApplicationInfo app = {
 			.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO,
@@ -45,33 +59,19 @@ int main(int argc, const char **argv) {
 			.apiVersion = VK_API_VERSION_1_3,
 		};
 
-		{
-			unsigned c = 64 - extension_count;
-			if (!SDL_Vulkan_GetInstanceExtensions(window, &c, &extension_names[extension_count])) {
-				fprintf(stderr, "SDL_GetVulkanInstanceExtensions failed: %s\n", SDL_GetError());
-				exit(1);
-			}
-			extension_count += c;
-		}
-
 		VkInstanceCreateInfo inst_info = {
 			.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
 			.flags = VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR,
 			.pApplicationInfo = &app,
 			.enabledExtensionCount = extension_count,
-			.ppEnabledExtensionNames = extension_names,
+			.ppEnabledExtensionNames = extension_names.data(),
 		};
 
 		CHECK_VULKAN(vkCreateInstance(&inst_info, NULL, &vk_instance));
 	}
 
 	VkSurfaceKHR vk_surface = VK_NULL_HANDLE;
-	{
-		if (!SDL_Vulkan_CreateSurface(window, vk_instance, &vk_surface)) {
-			fprintf(stderr, "SDL_CreateVulkanSurface failed: %s\n", SDL_GetError());
-			exit(1);
-		}
-	}
+	check_sdl(SDL_Vulkan_CreateSurface(window, vk_instance, &vk_surface));
 
 	VkPhysicalDevice vk_physical_device = VK_NULL_HANDLE;
 	{
