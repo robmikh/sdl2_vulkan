@@ -3,20 +3,22 @@
 #include <string>
 #include <algorithm>
 #include <array>
+#include <sstream>
 #include <SDL.h>
 #include <SDL_syswm.h>
 #include <SDL_vulkan.h>
 #include <vulkan/vulkan.h>
 #include "spirv_shaders_embedded_spv.h"
 
-#define CHECK_VULKAN(FN) \
-	{ \
-		VkResult r = FN; \
-		if (r != VK_SUCCESS) {\
-			std::cout << #FN << " failed with " << r << "\n" << std::flush; \
-			throw std::runtime_error(#FN " failed!");  \
-		} \
+inline void check_vulkan(VkResult result)
+{
+	if (result != VK_SUCCESS)
+	{
+		std::stringstream stream;
+		stream << "Vulkan call failed with: " << result << std::endl;
+		throw std::runtime_error(stream.str());
 	}
+}
 
 inline void check_sdl(SDL_bool value)
 {
@@ -29,9 +31,11 @@ inline void check_sdl(SDL_bool value)
 int win_width = 1280;
 int win_height = 720;
 
-int main(int argc, const char **argv) {
+int main(int argc, const char **argv) 
+{
 	SDL_SetHint(SDL_HINT_FRAMEBUFFER_ACCELERATION, "1");
-	if (SDL_Init(SDL_INIT_EVERYTHING) != 0) {
+	if (SDL_Init(SDL_INIT_EVERYTHING) != 0) 
+	{
 		std::cerr << "Failed to init SDL: " << SDL_GetError() << "\n";
 		return -1;
 	}
@@ -53,13 +57,15 @@ int main(int argc, const char **argv) {
 		extension_names.push_back(VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME);
 		uint32_t extension_count = static_cast<uint32_t>(extension_names.size());
 
-		const VkApplicationInfo app = {
+		const VkApplicationInfo app = 
+		{
 			.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO,
 			.pApplicationName = "sdl2_vulkan",
 			.apiVersion = VK_API_VERSION_1_3,
 		};
 
-		VkInstanceCreateInfo inst_info = {
+		VkInstanceCreateInfo inst_info = 
+		{
 			.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
 			.flags = VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR,
 			.pApplicationInfo = &app,
@@ -67,7 +73,7 @@ int main(int argc, const char **argv) {
 			.ppEnabledExtensionNames = extension_names.data(),
 		};
 
-		CHECK_VULKAN(vkCreateInstance(&inst_info, NULL, &vk_instance));
+		check_vulkan(vkCreateInstance(&inst_info, NULL, &vk_instance));
 	}
 
 	VkSurfaceKHR vk_surface = VK_NULL_HANDLE;
@@ -82,13 +88,15 @@ int main(int argc, const char **argv) {
 		vkEnumeratePhysicalDevices(vk_instance, &device_count, devices.data());
 
 		const bool has_discrete_gpu = std::find_if(devices.begin(), devices.end(),
-			[](const VkPhysicalDevice& d) {
+			[](const VkPhysicalDevice& d) 
+			{
 				VkPhysicalDeviceProperties properties;
 				vkGetPhysicalDeviceProperties(d, &properties);
 				return properties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU;
 			}) != devices.end();
 
-		for (const auto &d : devices) {
+		for (const auto &d : devices) 
+		{
 			VkPhysicalDeviceProperties properties;
 			VkPhysicalDeviceFeatures features;
 			vkGetPhysicalDeviceProperties(d, &properties);
@@ -102,14 +110,18 @@ int main(int argc, const char **argv) {
 			std::vector<VkExtensionProperties> extensions(extension_count, VkExtensionProperties{});
 			vkEnumerateDeviceExtensionProperties(d, nullptr, &extension_count, extensions.data());
 			std::cout << "Device available extensions:\n";
-			for (const auto& e : extensions) {
+			for (const auto& e : extensions) 
+			{
 				std::cout << e.extensionName << "\n";
 			}
 
-			if (has_discrete_gpu && properties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU) {
+			if (has_discrete_gpu && properties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU) 
+			{
 				vk_physical_device = d;
 				break;
-			} else if (!has_discrete_gpu && properties.deviceType == VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU) {
+			} 
+			else if (!has_discrete_gpu && properties.deviceType == VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU) 
+			{
 				vk_physical_device = d;
 				break;
 			}
@@ -124,11 +136,13 @@ int main(int argc, const char **argv) {
 		vkGetPhysicalDeviceQueueFamilyProperties(vk_physical_device, &num_queue_families, nullptr);
 		std::vector<VkQueueFamilyProperties> family_props(num_queue_families, VkQueueFamilyProperties{});
 		vkGetPhysicalDeviceQueueFamilyProperties(vk_physical_device, &num_queue_families, family_props.data());
-		for (uint32_t i = 0; i < num_queue_families; ++i) {
+		for (uint32_t i = 0; i < num_queue_families; ++i) 
+		{
 			// We want present and graphics on the same queue (kind of assume this will be supported on any discrete GPU)
 			VkBool32 present_support = false;
 			vkGetPhysicalDeviceSurfaceSupportKHR(vk_physical_device, i, vk_surface, &present_support);
-			if (present_support && (family_props[i].queueFlags & VK_QUEUE_GRAPHICS_BIT)) {
+			if (present_support && (family_props[i].queueFlags & VK_QUEUE_GRAPHICS_BIT)) 
+			{
 				graphics_queue_index = i;
 			}
 		}
@@ -144,7 +158,8 @@ int main(int argc, const char **argv) {
 		VkPhysicalDeviceFeatures device_features = {};
 		// TODO: RTX feature
 
-		const std::array<const char*, 1> device_extensions = {
+		const std::array<const char*, 1> device_extensions = 
+		{
 			VK_KHR_SWAPCHAIN_EXTENSION_NAME
 		};
 
@@ -157,7 +172,7 @@ int main(int argc, const char **argv) {
 		create_info.enabledExtensionCount = device_extensions.size();
 		create_info.ppEnabledExtensionNames = device_extensions.data();
 		create_info.pEnabledFeatures = &device_features;
-		CHECK_VULKAN(vkCreateDevice(vk_physical_device, &create_info, nullptr, &vk_device));
+		check_vulkan(vkCreateDevice(vk_physical_device, &create_info, nullptr, &vk_device));
 
 		vkGetDeviceQueue(vk_device, graphics_queue_index, 0, &vk_queue);
 	}
@@ -188,7 +203,7 @@ int main(int argc, const char **argv) {
 		create_info.presentMode = VK_PRESENT_MODE_FIFO_KHR;
 		create_info.clipped = true;
 		create_info.oldSwapchain = VK_NULL_HANDLE;
-		CHECK_VULKAN(vkCreateSwapchainKHR(vk_device, &create_info, nullptr, &vk_swapchain));
+		check_vulkan(vkCreateSwapchainKHR(vk_device, &create_info, nullptr, &vk_swapchain));
 
 		// Get the swap chain images
 		uint32_t num_swapchain_imgs = 0;
@@ -196,7 +211,8 @@ int main(int argc, const char **argv) {
 		swapchain_images.resize(num_swapchain_imgs);
 		vkGetSwapchainImagesKHR(vk_device, vk_swapchain, &num_swapchain_imgs, swapchain_images.data());
 
-		for (const auto &img : swapchain_images) {
+		for (const auto &img : swapchain_images) 
+		{
 			VkImageViewCreateInfo view_create_info = {};
 			view_create_info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
 			view_create_info.image = img;
@@ -215,7 +231,7 @@ int main(int argc, const char **argv) {
 			view_create_info.subresourceRange.layerCount = 1;
 
 			VkImageView img_view;
-			CHECK_VULKAN(vkCreateImageView(vk_device, &view_create_info, nullptr, &img_view));
+			check_vulkan(vkCreateImageView(vk_device, &view_create_info, nullptr, &img_view));
 			swapchain_image_views.push_back(img_view);
 		}
 	}
@@ -231,7 +247,7 @@ int main(int argc, const char **argv) {
 		create_info.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
 		create_info.codeSize = sizeof(vert_spv);
 		create_info.pCode = vert_spv;
-		CHECK_VULKAN(vkCreateShaderModule(vk_device, &create_info, nullptr, &vertex_shader_module));
+		check_vulkan(vkCreateShaderModule(vk_device, &create_info, nullptr, &vertex_shader_module));
 		
 		VkPipelineShaderStageCreateInfo vertex_stage = {};
 		vertex_stage.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
@@ -243,7 +259,7 @@ int main(int argc, const char **argv) {
 		create_info.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
 		create_info.codeSize = sizeof(frag_spv);
 		create_info.pCode = frag_spv;
-		CHECK_VULKAN(vkCreateShaderModule(vk_device, &create_info, nullptr, &fragment_shader_module));
+		check_vulkan(vkCreateShaderModule(vk_device, &create_info, nullptr, &fragment_shader_module));
 
 		VkPipelineShaderStageCreateInfo fragment_stage = {};
 		fragment_stage.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
@@ -314,7 +330,7 @@ int main(int argc, const char **argv) {
 
 		VkPipelineLayoutCreateInfo pipeline_info = {};
 		pipeline_info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-		CHECK_VULKAN(vkCreatePipelineLayout(vk_device, &pipeline_info, nullptr, &vk_pipeline_layout));
+		check_vulkan(vkCreatePipelineLayout(vk_device, &pipeline_info, nullptr, &vk_pipeline_layout));
 
 		VkAttachmentDescription color_attachment = {};
 		color_attachment.format = swapchain_img_format;
@@ -341,7 +357,7 @@ int main(int argc, const char **argv) {
 		render_pass_info.pAttachments = &color_attachment;
 		render_pass_info.subpassCount = 1;
 		render_pass_info.pSubpasses = &subpass;
-		CHECK_VULKAN(vkCreateRenderPass(vk_device, &render_pass_info, nullptr, &vk_render_pass));
+		check_vulkan(vkCreateRenderPass(vk_device, &render_pass_info, nullptr, &vk_render_pass));
 
 		VkGraphicsPipelineCreateInfo graphics_pipeline_info = {};
 		graphics_pipeline_info.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
@@ -356,7 +372,7 @@ int main(int argc, const char **argv) {
 		graphics_pipeline_info.layout = vk_pipeline_layout;
 		graphics_pipeline_info.renderPass = vk_render_pass;
 		graphics_pipeline_info.subpass = 0;
-		CHECK_VULKAN(vkCreateGraphicsPipelines(vk_device, VK_NULL_HANDLE, 1, &graphics_pipeline_info, nullptr, &vk_pipeline));
+		check_vulkan(vkCreateGraphicsPipelines(vk_device, VK_NULL_HANDLE, 1, &graphics_pipeline_info, nullptr, &vk_pipeline));
 
 		vkDestroyShaderModule(vk_device, vertex_shader_module, nullptr);
 		vkDestroyShaderModule(vk_device, fragment_shader_module, nullptr);
@@ -364,7 +380,8 @@ int main(int argc, const char **argv) {
 
 	// Setup framebuffers
 	std::vector<VkFramebuffer> framebuffers;
-	for (const auto &v : swapchain_image_views) {
+	for (const auto &v : swapchain_image_views) 
+	{
 		std::array<VkImageView, 1> attachments = { v };
 		VkFramebufferCreateInfo create_info = {};
 		create_info.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
@@ -375,7 +392,7 @@ int main(int argc, const char **argv) {
 		create_info.height = win_height;
 		create_info.layers = 1;
 		VkFramebuffer fb = VK_NULL_HANDLE;
-		CHECK_VULKAN(vkCreateFramebuffer(vk_device, &create_info, nullptr, &fb));
+		check_vulkan(vkCreateFramebuffer(vk_device, &create_info, nullptr, &fb));
 		framebuffers.push_back(fb);
 	}
 
@@ -385,7 +402,7 @@ int main(int argc, const char **argv) {
 		VkCommandPoolCreateInfo create_info = {};
 		create_info.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
 		create_info.queueFamilyIndex = graphics_queue_index;
-		CHECK_VULKAN(vkCreateCommandPool(vk_device, &create_info, nullptr, &vk_command_pool));
+		check_vulkan(vkCreateCommandPool(vk_device, &create_info, nullptr, &vk_command_pool));
 	}
 
 	std::vector<VkCommandBuffer> command_buffers(framebuffers.size(), VkCommandBuffer{});
@@ -395,17 +412,18 @@ int main(int argc, const char **argv) {
 		info.commandPool = vk_command_pool;
 		info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
 		info.commandBufferCount = command_buffers.size();
-		CHECK_VULKAN(vkAllocateCommandBuffers(vk_device, &info, command_buffers.data()));
+		check_vulkan(vkAllocateCommandBuffers(vk_device, &info, command_buffers.data()));
 	}
 
 	// Now record the rendering commands (TODO: Could also do this pre-recording in the DXR backend
 	// of rtobj. Will there be much perf. difference?)
-	for (size_t i = 0; i < command_buffers.size(); ++i) {
+	for (size_t i = 0; i < command_buffers.size(); ++i) 
+	{
 		auto& cmd_buf = command_buffers[i];
 
 		VkCommandBufferBeginInfo begin_info = {};
 		begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-		CHECK_VULKAN(vkBeginCommandBuffer(cmd_buf, &begin_info));
+		check_vulkan(vkBeginCommandBuffer(cmd_buf, &begin_info));
 
 		VkRenderPassBeginInfo render_pass_info = {};
 		render_pass_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
@@ -428,7 +446,7 @@ int main(int argc, const char **argv) {
 
 		vkCmdEndRenderPass(cmd_buf);
 
-		CHECK_VULKAN(vkEndCommandBuffer(cmd_buf));
+		check_vulkan(vkEndCommandBuffer(cmd_buf));
 	}
 
 	VkSemaphore img_avail_semaphore = VK_NULL_HANDLE;
@@ -437,8 +455,8 @@ int main(int argc, const char **argv) {
 		VkSemaphoreCreateInfo info = {};
 		info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
 
-		CHECK_VULKAN(vkCreateSemaphore(vk_device, &info, nullptr, &img_avail_semaphore));
-		CHECK_VULKAN(vkCreateSemaphore(vk_device, &info, nullptr, &render_finished_semaphore));
+		check_vulkan(vkCreateSemaphore(vk_device, &info, nullptr, &img_avail_semaphore));
+		check_vulkan(vkCreateSemaphore(vk_device, &info, nullptr, &render_finished_semaphore));
 	}
 
 	// We use a fence to wait for the rendering work to finish
@@ -446,29 +464,34 @@ int main(int argc, const char **argv) {
 	{
 		VkFenceCreateInfo info = {};
 		info.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
-		CHECK_VULKAN(vkCreateFence(vk_device, &info, nullptr, &vk_fence));
+		check_vulkan(vkCreateFence(vk_device, &info, nullptr, &vk_fence));
 	}
 
 	std::cout << "Running loop\n";
 	bool done = false;
-	while (!done) {
+	while (!done) 
+	{
 		SDL_Event event;
-		while (SDL_PollEvent(&event)) {
-			if (event.type == SDL_QUIT) {
+		while (SDL_PollEvent(&event))
+	    {
+			if (event.type == SDL_QUIT) 
+			{
 				done = true;
 			}
-			if (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_ESCAPE) {
+			if (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_ESCAPE) 
+			{
 				done = true;
 			}
 			if (event.type == SDL_WINDOWEVENT && event.window.event == SDL_WINDOWEVENT_CLOSE
-					&& event.window.windowID == SDL_GetWindowID(window)) {
+					&& event.window.windowID == SDL_GetWindowID(window)) 
+			{
 				done = true;
 			}
 		}
 
 		// Get an image from the swap chain
 		uint32_t img_index = 0;
-		CHECK_VULKAN(vkAcquireNextImageKHR(vk_device, vk_swapchain, std::numeric_limits<uint64_t>::max(),
+		check_vulkan(vkAcquireNextImageKHR(vk_device, vk_swapchain, std::numeric_limits<uint64_t>::max(),
 			img_avail_semaphore, VK_NULL_HANDLE, &img_index));
 
 		// We need to wait for the image before we can run the commands to draw to it, and signal
@@ -477,7 +500,7 @@ int main(int argc, const char **argv) {
 		const std::array<VkSemaphore, 1> signal_semaphores = { render_finished_semaphore };
 		const std::array<VkPipelineStageFlags, 1> wait_stages = { VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT };
 
-		CHECK_VULKAN(vkResetFences(vk_device, 1, &vk_fence));
+		check_vulkan(vkResetFences(vk_device, 1, &vk_fence));
 		
 		VkSubmitInfo submit_info = {};
 		submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
@@ -488,7 +511,7 @@ int main(int argc, const char **argv) {
 		submit_info.pCommandBuffers = &command_buffers[img_index];
 		submit_info.signalSemaphoreCount = signal_semaphores.size();
 		submit_info.pSignalSemaphores = signal_semaphores.data();
-		CHECK_VULKAN(vkQueueSubmit(vk_queue, 1, &submit_info, vk_fence));
+		check_vulkan(vkQueueSubmit(vk_queue, 1, &submit_info, vk_fence));
 
 		// Finally, present the updated image in the swap chain
 		std::array<VkSwapchainKHR, 1> present_chain = { vk_swapchain };
@@ -499,10 +522,10 @@ int main(int argc, const char **argv) {
 		present_info.swapchainCount = present_chain.size();
 		present_info.pSwapchains = present_chain.data();
 		present_info.pImageIndices = &img_index;
-		CHECK_VULKAN(vkQueuePresentKHR(vk_queue, &present_info));
+		check_vulkan(vkQueuePresentKHR(vk_queue, &present_info));
 
 		// Wait for the frame to finish
-		CHECK_VULKAN(vkWaitForFences(vk_device, 1, &vk_fence, true, std::numeric_limits<uint64_t>::max()));
+		check_vulkan(vkWaitForFences(vk_device, 1, &vk_fence, true, std::numeric_limits<uint64_t>::max()));
 	}
 
 	vkDestroySemaphore(vk_device, img_avail_semaphore, nullptr);
@@ -510,13 +533,15 @@ int main(int argc, const char **argv) {
 	vkDestroyFence(vk_device, vk_fence, nullptr);
 	vkDestroyCommandPool(vk_device, vk_command_pool, nullptr);
 	vkDestroySwapchainKHR(vk_device, vk_swapchain, nullptr);
-	for (auto &fb : framebuffers) {
+	for (auto &fb : framebuffers) 
+	{
 		vkDestroyFramebuffer(vk_device, fb, nullptr);
 	}
 	vkDestroyPipeline(vk_device, vk_pipeline, nullptr);
 	vkDestroyRenderPass(vk_device, vk_render_pass, nullptr);
 	vkDestroyPipelineLayout(vk_device, vk_pipeline_layout, nullptr);
-	for (auto &v : swapchain_image_views) {
+	for (auto &v : swapchain_image_views) 
+	{
 		vkDestroyImageView(vk_device, v, nullptr);
 	}	
 	vkDestroySurfaceKHR(vk_instance, vk_surface, nullptr);
