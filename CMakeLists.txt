@@ -17,6 +17,10 @@ set_target_properties(sdl2_vulkan PROPERTIES
 	CXX_STANDARD 14
 	CXX_STANDARD_REQUIRED ON)
 
+target_compile_options(sdl2_vulkan PRIVATE
+    $<$<CXX_COMPILER_ID:Clang>:-g>
+    )
+
 target_include_directories(sdl2_vulkan PUBLIC
 	$<BUILD_INTERFACE:${SDL2_INCLUDE_DIR}>)
 
