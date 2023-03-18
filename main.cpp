@@ -5,19 +5,15 @@
 #include <array>
 #include <SDL.h>
 #include <SDL_syswm.h>
+#include <SDL_vulkan.h>
 #include <vulkan/vulkan.h>
-#if WIN32
-#include <vulkan/vulkan_win32.h>
-#else
-#include <vulkan/vulkan_metal.h>
-#endif
 #include "spirv_shaders_embedded_spv.h"
 
 #define CHECK_VULKAN(FN) \
 	{ \
 		VkResult r = FN; \
 		if (r != VK_SUCCESS) {\
-			std::cout << #FN << " failed\n" << std::flush; \
+			std::cout << #FN << " failed with " << r << "\n" << std::flush; \
 			throw std::runtime_error(#FN " failed!");  \
 		} \
 	}
@@ -26,96 +22,55 @@ int win_width = 1280;
 int win_height = 720;
 
 int main(int argc, const char **argv) {
-	if (SDL_Init(SDL_INIT_EVERYTHING) != 0) {
+	SDL_SetHint(SDL_HINT_FRAMEBUFFER_ACCELERATION, "1");
+	if (SDL_Init(SDL_INIT_VIDEO/*SDL_INIT_EVERYTHING*/) != 0) {
 		std::cerr << "Failed to init SDL: " << SDL_GetError() << "\n";
 		return -1;
 	}
 
 	SDL_Window* window = SDL_CreateWindow("SDL2 + Vulkan",
-		SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, win_width, win_height, 0);
-
-	// On macOS we need to create a CALayer
-#if WIN32
-#else
-	SDL_MetalView metalView = SDL_Metal_CreateView(window);
-#endif
+		SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, win_width, win_height, SDL_WINDOW_VULKAN);
 	
-	{
-		uint32_t extension_count = 0;
-		vkEnumerateInstanceExtensionProperties(nullptr, &extension_count, nullptr);
-		std::cout << "num extensions: " << extension_count << "\n";
-		std::vector<VkExtensionProperties> extensions(extension_count, VkExtensionProperties{});
-		vkEnumerateInstanceExtensionProperties(nullptr, &extension_count, extensions.data());
-		std::cout << "Available extensions:\n";
-		for (const auto& e : extensions) {
-			std::cout << e.extensionName << "\n";
-		}
-	}
-
-	const std::array<const char*, 1> validation_layers = {
-		"VK_LAYER_KHRONOS_validation"
-	};
-
 	// Make the Vulkan Instance
 	VkInstance vk_instance = VK_NULL_HANDLE;
 	{
-		VkApplicationInfo app_info = {};
-		app_info.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
-		app_info.pApplicationName = "SDL2 + Vulkan";
-		app_info.applicationVersion = VK_MAKE_VERSION(1, 0, 0);
-		app_info.pEngineName = "None";
-		app_info.engineVersion = VK_MAKE_VERSION(1, 0, 0);
-		app_info.apiVersion = VK_API_VERSION_1_1;
+		uint32_t extension_count = 0;
+		const char* extension_names[64];
+		extension_names[extension_count++] = VK_KHR_SURFACE_EXTENSION_NAME;
+		extension_names[extension_count++] = VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME;
 
-		const std::vector<const char*> extension_names = {
-			VK_KHR_SURFACE_EXTENSION_NAME, 
-#if WIN32
-			VK_KHR_WIN32_SURFACE_EXTENSION_NAME,
-#else
-			VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME,
-			VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME,
-			VK_EXT_METAL_SURFACE_EXTENSION_NAME,
-#endif
+		const VkApplicationInfo app = {
+			.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO,
+			.pApplicationName = "sdl2_vulkan",
+			.apiVersion = VK_API_VERSION_1_3,
 		};
 
-		VkInstanceCreateInfo create_info = {};
-		create_info.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
-#ifdef WIN32
-#else
-		create_info.flags = VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR;
-#endif
-		create_info.pApplicationInfo = &app_info;
-		create_info.enabledExtensionCount = extension_names.size();
-		create_info.ppEnabledExtensionNames = extension_names.data();
-		create_info.enabledLayerCount = validation_layers.size();
-		create_info.ppEnabledLayerNames = validation_layers.data();
+		{
+			unsigned c = 64 - extension_count;
+			if (!SDL_Vulkan_GetInstanceExtensions(window, &c, &extension_names[extension_count])) {
+				fprintf(stderr, "SDL_GetVulkanInstanceExtensions failed: %s\n", SDL_GetError());
+				exit(1);
+			}
+			extension_count += c;
+		}
 
-		CHECK_VULKAN(vkCreateInstance(&create_info, nullptr, &vk_instance));
+		VkInstanceCreateInfo inst_info = {
+			.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
+			.flags = VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR,
+			.pApplicationInfo = &app,
+			.enabledExtensionCount = extension_count,
+			.ppEnabledExtensionNames = extension_names,
+		};
+
+		CHECK_VULKAN(vkCreateInstance(&inst_info, NULL, &vk_instance));
 	}
 
 	VkSurfaceKHR vk_surface = VK_NULL_HANDLE;
 	{
-		SDL_SysWMinfo wm_info;
-		SDL_VERSION(&wm_info.version);
-		SDL_GetWindowWMInfo(window, &wm_info);
-
-#if WIN32
-		VkWin32SurfaceCreateInfoKHR create_info = {};
-		create_info.sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR;
-		create_info.hwnd = wm_info.info.win.window;
-		create_info.hinstance = wm_info.info.win.hinstance;
-		CHECK_VULKAN(vkCreateWin32SurfaceKHR(vk_instance, &create_info, nullptr, &vk_surface));
-#else
-		VkMetalSurfaceCreateInfoEXT create_info = {};
-        create_info.sType = VK_STRUCTURE_TYPE_METAL_SURFACE_CREATE_INFO_EXT;
-        //create_info.flags = VkMetalSurfaceCreateFlagsEXT;
-        create_info.pLayer = metalView;
-        CHECK_VULKAN(vkCreateMetalSurfaceEXT(
-            vk_instance,
-            &create_info,
-            nullptr,
-            &vk_surface));
-#endif
+		if (!SDL_Vulkan_CreateSurface(window, vk_instance, &vk_surface)) {
+			fprintf(stderr, "SDL_CreateVulkanSurface failed: %s\n", SDL_GetError());
+			exit(1);
+		}
 	}
 
 	VkPhysicalDevice vk_physical_device = VK_NULL_HANDLE;
@@ -197,8 +152,8 @@ int main(int argc, const char **argv) {
 		create_info.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
 		create_info.queueCreateInfoCount = 1;
 		create_info.pQueueCreateInfos = &queue_create_info;
-		create_info.enabledLayerCount = validation_layers.size();
-		create_info.ppEnabledLayerNames = validation_layers.data();
+		//create_info.enabledLayerCount = validation_layers.size();
+		//create_info.ppEnabledLayerNames = validation_layers.data();
 		create_info.enabledExtensionCount = device_extensions.size();
 		create_info.ppEnabledExtensionNames = device_extensions.data();
 		create_info.pEnabledFeatures = &device_features;
