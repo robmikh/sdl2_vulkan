@@ -6,7 +6,11 @@
 #include <SDL.h>
 #include <SDL_syswm.h>
 #include <vulkan/vulkan.h>
+#if WIN32
 #include <vulkan/vulkan_win32.h>
+#else
+#include <vulkan/vulkan_metal.h>
+#endif
 #include "spirv_shaders_embedded_spv.h"
 
 #define CHECK_VULKAN(FN) \
@@ -58,7 +62,12 @@ int main(int argc, const char **argv) {
 		app_info.apiVersion = VK_API_VERSION_1_1;
 
 		const std::array<const char*, 2> extension_names = {
-			VK_KHR_SURFACE_EXTENSION_NAME, VK_KHR_WIN32_SURFACE_EXTENSION_NAME,
+			VK_KHR_SURFACE_EXTENSION_NAME, 
+#if WIN32
+			VK_KHR_WIN32_SURFACE_EXTENSION_NAME,
+#else
+			VK_EXT_METAL_SURFACE_EXTENSION_NAME,
+#endif
 		};
 
 		VkInstanceCreateInfo create_info = {};
@@ -72,17 +81,35 @@ int main(int argc, const char **argv) {
 		CHECK_VULKAN(vkCreateInstance(&create_info, nullptr, &vk_instance));
 	}
 
+	// On macOS we need to create a CALayer
+#if WIN32
+#else
+	SDL_MetalView metalView = SDL_Metal_CreateView(window);
+#endif
+
 	VkSurfaceKHR vk_surface = VK_NULL_HANDLE;
 	{
 		SDL_SysWMinfo wm_info;
 		SDL_VERSION(&wm_info.version);
 		SDL_GetWindowWMInfo(window, &wm_info);
 
+#if WIN32
 		VkWin32SurfaceCreateInfoKHR create_info = {};
 		create_info.sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR;
 		create_info.hwnd = wm_info.info.win.window;
 		create_info.hinstance = wm_info.info.win.hinstance;
 		CHECK_VULKAN(vkCreateWin32SurfaceKHR(vk_instance, &create_info, nullptr, &vk_surface));
+#else
+		VkMetalSurfaceCreateInfoEXT create_info = {};
+        create_info.sType = VK_STRUCTURE_TYPE_METAL_SURFACE_CREATE_INFO_EXT;
+        //create_info.flags = VkMetalSurfaceCreateFlagsEXT;
+        create_info.pLayer = metalView;
+        CHECK_VULKAN(vkCreateMetalSurfaceEXT(
+            vk_instance,
+            &create_info,
+            nullptr,
+            &vk_surface));
+#endif
 	}
 
 	VkPhysicalDevice vk_physical_device = VK_NULL_HANDLE;
