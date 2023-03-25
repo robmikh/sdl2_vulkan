@@ -9,6 +9,7 @@
 #include <SDL_vulkan.h>
 #include <vulkan/vulkan.h>
 #include "spirv_shaders_embedded_spv.h"
+#include <vulkan/vulkan.hpp>
 
 inline void check_vulkan(VkResult result)
 {
@@ -31,6 +32,9 @@ inline void check_sdl(SDL_bool value)
 int win_width = 1280;
 int win_height = 720;
 
+static std::string AppName    = "SDL2/Vulkan";
+static std::string EngineName = "Sample Engine";
+
 int main(int argc, const char **argv) 
 {
 	SDL_SetHint(SDL_HINT_FRAMEBUFFER_ACCELERATION, "1");
@@ -42,6 +46,56 @@ int main(int argc, const char **argv)
 
 	SDL_Window* window = SDL_CreateWindow("SDL2 + Vulkan",
 		SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, win_width, win_height, SDL_WINDOW_VULKAN);
+
+	// Get the required extensions
+	std::vector<const char*> extensionNames;
+	{
+		uint32_t numRequiredExtensions = 0;
+		check_sdl(SDL_Vulkan_GetInstanceExtensions(window, &numRequiredExtensions, nullptr));
+
+		extensionNames = std::vector<const char*>(static_cast<size_t>(numRequiredExtensions), nullptr);
+
+		check_sdl(SDL_Vulkan_GetInstanceExtensions(window, &numRequiredExtensions, extensionNames.data()));
+
+		extensionNames.emplace_back(VK_KHR_SURFACE_EXTENSION_NAME);
+		extensionNames.emplace_back(VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME);
+	}
+
+	// Create the Vulkan instance
+	vk::UniqueInstance instance;
+	{
+		uint32_t extensionCount = static_cast<uint32_t>(extensionNames.size());
+
+		vk::ApplicationInfo applicationInfo(AppName.c_str(), 1, EngineName.c_str(), 1, VK_API_VERSION_1_3);
+		vk::InstanceCreateInfo instanceCreateInfo(
+			vk::InstanceCreateFlags(vk::InstanceCreateFlagBits::eEnumeratePortabilityKHR), 
+			&applicationInfo,
+			0,
+			nullptr,
+			extensionCount,
+			extensionNames.data());
+
+		instance = vk::createInstanceUnique(instanceCreateInfo);
+	}
+
+	VkSurfaceKHR vkSurface = VK_NULL_HANDLE;
+	check_sdl(SDL_Vulkan_CreateSurface(window, instance.get(), &vkSurface));
+
+	// Select a physical device
+	vk::PhysicalDevice physicalDevice;
+	{
+		auto devices = instance->enumeratePhysicalDevices();
+		std::cout << "Found " << devices.size() << " devices." << std::endl;
+
+		const bool hasDiscreteGpu = std::find_if(devices.begin(), devices.end(),
+		[](auto&& device)
+		{
+			auto properties = device.
+		}) != devices.npos();
+	}
+
+
+	throw std::runtime_error("it works!");
 	
 	// Make the Vulkan Instance
 	VkInstance vk_instance = VK_NULL_HANDLE;
