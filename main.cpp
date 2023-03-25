@@ -356,24 +356,23 @@ int main(int argc, const char **argv)
 			0);
         pipeline = device->createGraphicsPipelineUnique(pipelineCache.get(), graphicsPipelineInfo).value;
     }
-
-	// Setup framebuffers
-	std::vector<VkFramebuffer> framebuffers;
-	for (const auto &v : swapchainImageViews)
-	{
-		std::array<VkImageView, 1> attachments = { v.get() };
-		VkFramebufferCreateInfo create_info = {};
-		create_info.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
-		create_info.renderPass = renderPass.get();
-		create_info.attachmentCount = 1;
-		create_info.pAttachments = attachments.data();
-		create_info.width = win_width;
-		create_info.height = win_height;
-		create_info.layers = 1;
-		VkFramebuffer fb = VK_NULL_HANDLE;
-		check_vulkan(vkCreateFramebuffer(device.get(), &create_info, nullptr, &fb));
-		framebuffers.push_back(fb);
-	}
+    
+    // Setup framebuffers
+    std::vector<vk::UniqueFramebuffer> framebuffers;
+    framebuffers.reserve(swapchainImageViews.size());
+    for (auto&& view : swapchainImageViews)
+    {
+		const std::vector<vk::ImageView> attachments = { view.get() };
+        vk::FramebufferCreateInfo createInfo(
+			{},
+			renderPass.get(),
+			1,
+			attachments.data(),
+			win_width,
+			win_height,
+			1);
+        framebuffers.push_back(std::move(device->createFramebufferUnique(createInfo)));
+    }
 
 	// Setup the command pool
 	VkCommandPool vk_command_pool;
@@ -407,7 +406,7 @@ int main(int argc, const char **argv)
 		VkRenderPassBeginInfo render_pass_info = {};
 		render_pass_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
 		render_pass_info.renderPass = renderPass.get();
-		render_pass_info.framebuffer = framebuffers[i];
+		render_pass_info.framebuffer = framebuffers[i].get();
 		render_pass_info.renderArea.offset.x = 0;
 		render_pass_info.renderArea.offset.y = 0;
 		render_pass_info.renderArea.extent = swapchainExtent;
@@ -511,10 +510,6 @@ int main(int argc, const char **argv)
 	vkDestroySemaphore(device.get(), render_finished_semaphore, nullptr);
 	vkDestroyFence(device.get(), vk_fence, nullptr);
 	vkDestroyCommandPool(device.get(), vk_command_pool, nullptr);
-	for (auto &fb : framebuffers) 
-	{
-		vkDestroyFramebuffer(device.get(), fb, nullptr);
-	}
 	vkDestroySurfaceKHR(instance.get(), vkSurface, nullptr);
 
 	SDL_DestroyWindow(window);
