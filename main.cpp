@@ -138,7 +138,32 @@ int main(int argc, const char **argv)
             }
         }
         std::cout << "Graphics queue index is " << graphicsQueueIndex << std::endl;
-        
+        const float queuePriority = 1.0f;
+
+        vk::DeviceQueueCreateInfo queueCreateInfo(
+			{},
+			graphicsQueueIndex,
+			1,
+			&queuePriority);
+
+		vk::PhysicalDeviceFeatures deviceFeatures;
+
+		const std::vector<const char*> deviceExtensions = 
+		{
+			VK_KHR_SWAPCHAIN_EXTENSION_NAME,
+		};
+
+		vk::DeviceCreateInfo createInfo(
+			{}, 
+			1, 
+			&queueCreateInfo, 
+			{}, 
+			{}, 
+			static_cast<uint32_t>(deviceExtensions.size()), 
+			deviceExtensions.data(), 
+			&deviceFeatures);
+		device = physicalDevice.createDeviceUnique(createInfo);
+        queue = device->getQueue(graphicsQueueIndex, 0);
 	}
 
 	throw std::runtime_error("it works!");
