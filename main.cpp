@@ -418,15 +418,13 @@ int main(int argc, const char **argv)
         commandBuffer->end();
     }
 
-	VkSemaphore img_avail_semaphore = VK_NULL_HANDLE;
-	VkSemaphore render_finished_semaphore = VK_NULL_HANDLE;
-	{
-		VkSemaphoreCreateInfo info = {};
-		info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
-
-		check_vulkan(vkCreateSemaphore(device.get(), &info, nullptr, &img_avail_semaphore));
-		check_vulkan(vkCreateSemaphore(device.get(), &info, nullptr, &render_finished_semaphore));
-	}
+    vk::UniqueSemaphore imgAvailSemaphore;
+    vk::UniqueSemaphore renderFinishedSemaphore;
+    {
+        vk::SemaphoreCreateInfo info;
+        imgAvailSemaphore = device->createSemaphoreUnique(info);
+        renderFinishedSemaphore = device->createSemaphoreUnique(info);
+    }
 
 	// We use a fence to wait for the rendering work to finish
 	VkFence vk_fence = VK_NULL_HANDLE;
@@ -461,12 +459,12 @@ int main(int argc, const char **argv)
 		// Get an image from the swap chain
 		uint32_t img_index = 0;
 		check_vulkan(vkAcquireNextImageKHR(device.get(), swapchain.get(), std::numeric_limits<uint64_t>::max(),
-			img_avail_semaphore, VK_NULL_HANDLE, &img_index));
+			imgAvailSemaphore.get(), VK_NULL_HANDLE, &img_index));
 
 		// We need to wait for the image before we can run the commands to draw to it, and signal
 		// the render finished one when we're done
-		const std::array<VkSemaphore, 1> wait_semaphores = { img_avail_semaphore };
-		const std::array<VkSemaphore, 1> signal_semaphores = { render_finished_semaphore };
+		const std::array<VkSemaphore, 1> wait_semaphores = { imgAvailSemaphore.get() };
+		const std::array<VkSemaphore, 1> signal_semaphores = { renderFinishedSemaphore.get() };
 		const std::array<VkPipelineStageFlags, 1> wait_stages = { VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT };
 
 		check_vulkan(vkResetFences(device.get(), 1, &vk_fence));
@@ -502,8 +500,6 @@ int main(int argc, const char **argv)
 		check_vulkan(vkWaitForFences(device.get(), 1, &vk_fence, true, std::numeric_limits<uint64_t>::max()));
 	}
 
-	vkDestroySemaphore(device.get(), img_avail_semaphore, nullptr);
-	vkDestroySemaphore(device.get(), render_finished_semaphore, nullptr);
 	vkDestroyFence(device.get(), vk_fence, nullptr);
 	vkDestroySurfaceKHR(instance.get(), vkSurface, nullptr);
 
