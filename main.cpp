@@ -391,40 +391,32 @@ int main(int argc, const char **argv)
 			static_cast<uint32_t>(framebuffers.size()));
         commandBuffers = device->allocateCommandBuffersUnique(info);
     }
-
-	// Now record the rendering commands (TODO: Could also do this pre-recording in the DXR backend
-	// of rtobj. Will there be much perf. difference?)
-	for (size_t i = 0; i < commandBuffers.size(); ++i)
-	{
-		auto& cmd_buf = commandBuffers[i];
-
-		VkCommandBufferBeginInfo begin_info = {};
-		begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-		check_vulkan(vkBeginCommandBuffer(cmd_buf.get(), &begin_info));
-
-		VkRenderPassBeginInfo render_pass_info = {};
-		render_pass_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-		render_pass_info.renderPass = renderPass.get();
-		render_pass_info.framebuffer = framebuffers[i].get();
-		render_pass_info.renderArea.offset.x = 0;
-		render_pass_info.renderArea.offset.y = 0;
-		render_pass_info.renderArea.extent = swapchainExtent;
-		
-		VkClearValue clear_color = { 0.f, 0.f, 0.f, 1.f };
-		render_pass_info.clearValueCount = 1;
-		render_pass_info.pClearValues = &clear_color;
-
-		vkCmdBeginRenderPass(cmd_buf.get(), &render_pass_info, VK_SUBPASS_CONTENTS_INLINE);
-
-		vkCmdBindPipeline(cmd_buf.get(), VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.get());
-
-		// Draw our "triangle" embedded in the shader
-		vkCmdDraw(cmd_buf.get(), 3, 1, 0, 0);
-
-		vkCmdEndRenderPass(cmd_buf.get());
-
-		check_vulkan(vkEndCommandBuffer(cmd_buf.get()));
-	}
+    
+    // Now record the rendering commands
+    for (size_t i = 0; i < commandBuffers.size(); i++)
+    {
+        auto&& commandBuffer = commandBuffers[i];
+        
+        commandBuffer->begin(vk::CommandBufferBeginInfo(vk::CommandBufferUsageFlags()));
+        
+        const std::vector<vk::ClearValue> clearValues =
+        {
+            vk::ClearColorValue(0.0f, 0.0f, 0.0f, 1.0f),
+        };
+        
+        vk::RenderPassBeginInfo renderPassBeginInfo(
+			renderPass.get(), 
+			framebuffers[i].get(), 
+			vk::Rect2D(vk::Offset2D(0.0f, 0.0f), swapchainExtent),
+            static_cast<uint32_t>(clearValues.size()),
+			clearValues.data());
+        commandBuffer->beginRenderPass(renderPassBeginInfo, vk::SubpassContents::eInline);
+        commandBuffer->bindPipeline(vk::PipelineBindPoint::eGraphics, pipeline.get());
+        commandBuffer->draw(3, 1, 0, 0);
+        commandBuffer->endRenderPass();
+        
+        commandBuffer->end();
+    }
 
 	VkSemaphore img_avail_semaphore = VK_NULL_HANDLE;
 	VkSemaphore render_finished_semaphore = VK_NULL_HANDLE;
