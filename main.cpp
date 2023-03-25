@@ -11,16 +11,6 @@
 #include "spirv_shaders_embedded_spv.h"
 #include <vulkan/vulkan.hpp>
 
-inline void check_vulkan(VkResult result)
-{
-	if (result != VK_SUCCESS)
-	{
-		std::stringstream stream;
-		stream << "Vulkan call failed with: " << result << std::endl;
-		throw std::runtime_error(stream.str());
-	}
-}
-
 inline void check_sdl(SDL_bool value)
 {
 	if (value != SDL_TRUE)
@@ -29,8 +19,8 @@ inline void check_sdl(SDL_bool value)
 	}
 }
 
-int win_width = 1280;
-int win_height = 720;
+int winWidth = 1280;
+int winHeight = 720;
 
 static std::string AppName    = "SDL2/Vulkan";
 static std::string EngineName = "Sample Engine";
@@ -45,7 +35,7 @@ int main(int argc, const char **argv)
 	}
 
 	SDL_Window* window = SDL_CreateWindow("SDL2 + Vulkan",
-		SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, win_width, win_height, SDL_WINDOW_VULKAN);
+		SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, winWidth, winHeight, SDL_WINDOW_VULKAN);
 
 	// Get the required extensions
 	std::vector<const char*> extensionNames;
@@ -170,7 +160,7 @@ int main(int argc, const char **argv)
     vk::UniqueSwapchainKHR swapchain;
     std::vector<vk::Image> swapchainImages;
     std::vector<vk::UniqueImageView> swapchainImageViews;
-    vk::Extent2D swapchainExtent(win_width, win_height);
+    vk::Extent2D swapchainExtent(winWidth, winHeight);
     const vk::Format format = vk::Format::eB8G8R8A8Unorm;
     {
         vk::SwapchainCreateInfoKHR swapchainCreateInfo(
@@ -261,7 +251,7 @@ int main(int argc, const char **argv)
 			false);
         
 		// Viewport
-		vk::Viewport viewport(0.0f, 0.0f, static_cast<float>(win_width), static_cast<float>(win_height), 0.0f, 1.0f);
+		vk::Viewport viewport(0.0f, 0.0f, static_cast<float>(winWidth), static_cast<float>(winHeight), 0.0f, 1.0f);
 
 		// Scissor rect
 		vk::Rect2D scissor(vk::Offset2D(0.0f, 0.0f), swapchainExtent);
@@ -368,8 +358,8 @@ int main(int argc, const char **argv)
 			renderPass.get(),
 			1,
 			attachments.data(),
-			win_width,
-			win_height,
+			winWidth,
+			winHeight,
 			1);
         framebuffers.push_back(std::move(device->createFramebufferUnique(createInfo)));
     }
