@@ -455,49 +455,48 @@ int main(int argc, const char **argv)
 			}
 		}
 
-		// Get an image from the swap chain
-		uint32_t img_index = 0;
-		check_vulkan(vkAcquireNextImageKHR(device.get(), swapchain.get(), std::numeric_limits<uint64_t>::max(),
-			imgAvailSemaphore.get(), VK_NULL_HANDLE, &img_index));
+		// Get an image from the swapchain
+        uint32_t imgIndex = device->acquireNextImageKHR(
+			swapchain.get(), 
+			std::numeric_limits<uint64_t>::max(), 
+			imgAvailSemaphore.get(), 
+			nullptr).value;
 
 		// We need to wait for the image before we can run the commands to draw to it, and signal
 		// the render finished one when we're done
-		const std::array<VkSemaphore, 1> wait_semaphores = { imgAvailSemaphore.get() };
-		const std::array<VkSemaphore, 1> signal_semaphores = { renderFinishedSemaphore.get() };
-		const std::array<VkPipelineStageFlags, 1> wait_stages = { VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT };
+		const std::vector<vk::Semaphore> waitSemaphores = { imgAvailSemaphore.get() };
+		const std::vector<vk::Semaphore> signalSemaphores = { renderFinishedSemaphore.get() };
         
-        VkFence vkFence = fence.get();
-		check_vulkan(vkResetFences(device.get(), 1, &vkFence));
+        const std::vector<vk::Fence> fences =
+        {
+            fence.get()
+        };
+        device->resetFences(fences);
 		
         const std::vector<VkCommandBuffer> buffers =
         {
-            commandBuffers[img_index].get()
+            commandBuffers[imgIndex].get()
         };
         
-		VkSubmitInfo submit_info = {};
-		submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-		submit_info.waitSemaphoreCount = wait_semaphores.size();
-		submit_info.pWaitSemaphores = wait_semaphores.data();
-		submit_info.pWaitDstStageMask = wait_stages.data();
-		submit_info.commandBufferCount = 1;
-		submit_info.pCommandBuffers = buffers.data();
-		submit_info.signalSemaphoreCount = signal_semaphores.size();
-		submit_info.pSignalSemaphores = signal_semaphores.data();
-		check_vulkan(vkQueueSubmit(queue, 1, &submit_info, fence.get()));
+        vk::PipelineStageFlags waitDestinationStageMask(vk::PipelineStageFlagBits::eTopOfPipe);
+        vk::SubmitInfo submitInfo(
+			waitSemaphores, 
+			waitDestinationStageMask, 
+			commandBuffers[imgIndex].get(), 
+			signalSemaphores);
+        queue.submit(submitInfo, fence.get());
 
 		// Finally, present the updated image in the swap chain
-		std::array<VkSwapchainKHR, 1> present_chain = { swapchain.get() };
-		VkPresentInfoKHR present_info = {};
-		present_info.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
-		present_info.waitSemaphoreCount = signal_semaphores.size();
-		present_info.pWaitSemaphores = signal_semaphores.data();
-		present_info.swapchainCount = present_chain.size();
-		present_info.pSwapchains = present_chain.data();
-		present_info.pImageIndices = &img_index;
-		check_vulkan(vkQueuePresentKHR(queue, &present_info));
-
+        const std::vector<vk::SwapchainKHR> presentChain = { swapchain.get() };
+        vk::PresentInfoKHR presentInfo(
+            signalSemaphores,
+            presentChain,
+            imgIndex);
+        auto result = queue.presentKHR(presentInfo);
+        assert(result == vk::Result::eSuccess);
+        
 		// Wait for the frame to finish
-		check_vulkan(vkWaitForFences(device.get(), 1, &vkFence, true, std::numeric_limits<uint64_t>::max()));
+        device->waitForFences(fence.get(), true, std::numeric_limits<uint64_t>::max());
 	}
 
 	vkDestroySurfaceKHR(instance.get(), vkSurface, nullptr);
