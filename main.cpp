@@ -427,12 +427,11 @@ int main(int argc, const char **argv)
     }
 
 	// We use a fence to wait for the rendering work to finish
-	VkFence vk_fence = VK_NULL_HANDLE;
-	{
-		VkFenceCreateInfo info = {};
-		info.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
-		check_vulkan(vkCreateFence(device.get(), &info, nullptr, &vk_fence));
-	}
+    vk::UniqueFence fence;
+    {
+        vk::FenceCreateInfo info;
+        fence = device->createFenceUnique(info);
+    }
 
 	std::cout << "Running loop\n";
 	bool done = false;
@@ -466,8 +465,9 @@ int main(int argc, const char **argv)
 		const std::array<VkSemaphore, 1> wait_semaphores = { imgAvailSemaphore.get() };
 		const std::array<VkSemaphore, 1> signal_semaphores = { renderFinishedSemaphore.get() };
 		const std::array<VkPipelineStageFlags, 1> wait_stages = { VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT };
-
-		check_vulkan(vkResetFences(device.get(), 1, &vk_fence));
+        
+        VkFence vkFence = fence.get();
+		check_vulkan(vkResetFences(device.get(), 1, &vkFence));
 		
         const std::vector<VkCommandBuffer> buffers =
         {
@@ -483,7 +483,7 @@ int main(int argc, const char **argv)
 		submit_info.pCommandBuffers = buffers.data();
 		submit_info.signalSemaphoreCount = signal_semaphores.size();
 		submit_info.pSignalSemaphores = signal_semaphores.data();
-		check_vulkan(vkQueueSubmit(queue, 1, &submit_info, vk_fence));
+		check_vulkan(vkQueueSubmit(queue, 1, &submit_info, fence.get()));
 
 		// Finally, present the updated image in the swap chain
 		std::array<VkSwapchainKHR, 1> present_chain = { swapchain.get() };
@@ -497,10 +497,9 @@ int main(int argc, const char **argv)
 		check_vulkan(vkQueuePresentKHR(queue, &present_info));
 
 		// Wait for the frame to finish
-		check_vulkan(vkWaitForFences(device.get(), 1, &vk_fence, true, std::numeric_limits<uint64_t>::max()));
+		check_vulkan(vkWaitForFences(device.get(), 1, &vkFence, true, std::numeric_limits<uint64_t>::max()));
 	}
 
-	vkDestroyFence(device.get(), vk_fence, nullptr);
 	vkDestroySurfaceKHR(instance.get(), vkSurface, nullptr);
 
 	SDL_DestroyWindow(window);
