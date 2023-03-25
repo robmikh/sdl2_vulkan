@@ -102,6 +102,22 @@ int main(int argc, const char **argv)
             auto features = device.getFeatures();
             
             std::cout << properties.deviceName << std::endl;
+            
+            if (hasDiscreteGpu && properties.deviceType == vk::PhysicalDeviceType::eDiscreteGpu)
+            {
+                physicalDevice = device;
+                break;
+            }
+            else if (!hasDiscreteGpu && properties.deviceType == vk::PhysicalDeviceType::eIntegratedGpu)
+            {
+                physicalDevice = device;
+                break;
+            }
+        }
+        
+        if (!physicalDevice)
+        {
+            throw std::runtime_error("No suitable physical device found!");
         }
 	}
 
