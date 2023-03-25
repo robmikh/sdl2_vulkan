@@ -383,25 +383,24 @@ int main(int argc, const char **argv)
         commandPool = device->createCommandPoolUnique(createInfo);
     }
 
-	std::vector<VkCommandBuffer> command_buffers(framebuffers.size(), VkCommandBuffer{});
-	{
-		VkCommandBufferAllocateInfo info = {};
-		info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-		info.commandPool = commandPool.get();
-		info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-		info.commandBufferCount = command_buffers.size();
-		check_vulkan(vkAllocateCommandBuffers(device.get(), &info, command_buffers.data()));
-	}
+    std::vector<vk::UniqueCommandBuffer> commandBuffers;
+    {
+        vk::CommandBufferAllocateInfo info(
+			commandPool.get(),
+			vk::CommandBufferLevel::ePrimary,
+			static_cast<uint32_t>(framebuffers.size()));
+        commandBuffers = device->allocateCommandBuffersUnique(info);
+    }
 
 	// Now record the rendering commands (TODO: Could also do this pre-recording in the DXR backend
 	// of rtobj. Will there be much perf. difference?)
-	for (size_t i = 0; i < command_buffers.size(); ++i) 
+	for (size_t i = 0; i < commandBuffers.size(); ++i)
 	{
-		auto& cmd_buf = command_buffers[i];
+		auto& cmd_buf = commandBuffers[i];
 
 		VkCommandBufferBeginInfo begin_info = {};
 		begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-		check_vulkan(vkBeginCommandBuffer(cmd_buf, &begin_info));
+		check_vulkan(vkBeginCommandBuffer(cmd_buf.get(), &begin_info));
 
 		VkRenderPassBeginInfo render_pass_info = {};
 		render_pass_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
@@ -415,16 +414,16 @@ int main(int argc, const char **argv)
 		render_pass_info.clearValueCount = 1;
 		render_pass_info.pClearValues = &clear_color;
 
-		vkCmdBeginRenderPass(cmd_buf, &render_pass_info, VK_SUBPASS_CONTENTS_INLINE);
+		vkCmdBeginRenderPass(cmd_buf.get(), &render_pass_info, VK_SUBPASS_CONTENTS_INLINE);
 
-		vkCmdBindPipeline(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.get());
+		vkCmdBindPipeline(cmd_buf.get(), VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.get());
 
 		// Draw our "triangle" embedded in the shader
-		vkCmdDraw(cmd_buf, 3, 1, 0, 0);
+		vkCmdDraw(cmd_buf.get(), 3, 1, 0, 0);
 
-		vkCmdEndRenderPass(cmd_buf);
+		vkCmdEndRenderPass(cmd_buf.get());
 
-		check_vulkan(vkEndCommandBuffer(cmd_buf));
+		check_vulkan(vkEndCommandBuffer(cmd_buf.get()));
 	}
 
 	VkSemaphore img_avail_semaphore = VK_NULL_HANDLE;
@@ -480,13 +479,18 @@ int main(int argc, const char **argv)
 
 		check_vulkan(vkResetFences(device.get(), 1, &vk_fence));
 		
+        const std::vector<VkCommandBuffer> buffers =
+        {
+            commandBuffers[img_index].get()
+        };
+        
 		VkSubmitInfo submit_info = {};
 		submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
 		submit_info.waitSemaphoreCount = wait_semaphores.size();
 		submit_info.pWaitSemaphores = wait_semaphores.data();
 		submit_info.pWaitDstStageMask = wait_stages.data();
 		submit_info.commandBufferCount = 1;
-		submit_info.pCommandBuffers = &command_buffers[img_index];
+		submit_info.pCommandBuffers = buffers.data();
 		submit_info.signalSemaphoreCount = signal_semaphores.size();
 		submit_info.pSignalSemaphores = signal_semaphores.data();
 		check_vulkan(vkQueueSubmit(queue, 1, &submit_info, vk_fence));
