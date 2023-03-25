@@ -86,12 +86,23 @@ int main(int argc, const char **argv)
 	{
 		auto devices = instance->enumeratePhysicalDevices();
 		std::cout << "Found " << devices.size() << " devices." << std::endl;
-
+        
+        
 		const bool hasDiscreteGpu = std::find_if(devices.begin(), devices.end(),
 		[](auto&& device)
 		{
-			auto properties = device.
-		}) != devices.npos();
+			auto properties = device.getProperties();
+			return properties.deviceType == vk::PhysicalDeviceType::eDiscreteGpu;
+		}) != devices.end();
+        
+        std::cout << "Enumerating devices: " << std::endl;
+        for (auto&& device : devices)
+        {
+            auto properties = device.getProperties();
+            auto features = device.getFeatures();
+            
+            std::cout << properties.deviceName << std::endl;
+        }
 	}
 
 
