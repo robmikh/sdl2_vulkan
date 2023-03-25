@@ -373,21 +373,21 @@ int main(int argc, const char **argv)
 			1);
         framebuffers.push_back(std::move(device->createFramebufferUnique(createInfo)));
     }
-
+    
 	// Setup the command pool
-	VkCommandPool vk_command_pool;
-	{
-		VkCommandPoolCreateInfo create_info = {};
-		create_info.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-		create_info.queueFamilyIndex = graphicsQueueIndex;
-		check_vulkan(vkCreateCommandPool(device.get(), &create_info, nullptr, &vk_command_pool));
-	}
+    vk::UniqueCommandPool commandPool;
+    {
+        vk::CommandPoolCreateInfo createInfo(
+			{},
+			graphicsQueueIndex);
+        commandPool = device->createCommandPoolUnique(createInfo);
+    }
 
 	std::vector<VkCommandBuffer> command_buffers(framebuffers.size(), VkCommandBuffer{});
 	{
 		VkCommandBufferAllocateInfo info = {};
 		info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-		info.commandPool = vk_command_pool;
+		info.commandPool = commandPool.get();
 		info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
 		info.commandBufferCount = command_buffers.size();
 		check_vulkan(vkAllocateCommandBuffers(device.get(), &info, command_buffers.data()));
@@ -509,7 +509,6 @@ int main(int argc, const char **argv)
 	vkDestroySemaphore(device.get(), img_avail_semaphore, nullptr);
 	vkDestroySemaphore(device.get(), render_finished_semaphore, nullptr);
 	vkDestroyFence(device.get(), vk_fence, nullptr);
-	vkDestroyCommandPool(device.get(), vk_command_pool, nullptr);
 	vkDestroySurfaceKHR(instance.get(), vkSurface, nullptr);
 
 	SDL_DestroyWindow(window);
