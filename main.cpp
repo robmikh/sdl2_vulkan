@@ -121,6 +121,25 @@ int main(int argc, const char **argv)
         }
 	}
 
+	// Create the device and queue
+	vk::UniqueDevice device;
+	vk::Queue queue;
+    uint32_t graphicsQueueIndex = -1;
+	{
+        auto queueFamilyProperties = physicalDevice.getQueueFamilyProperties();
+        for (uint32_t i = 0; i < queueFamilyProperties.size(); i++)
+        {
+            auto&& properties = queueFamilyProperties[i];
+            auto presentSupport = physicalDevice.getSurfaceSupportKHR(i, vkSurface);
+            if (presentSupport && properties.queueFlags & vk::QueueFlagBits::eGraphics)
+            {
+                graphicsQueueIndex = i;
+                break;
+            }
+        }
+        std::cout << "Graphics queue index is " << graphicsQueueIndex << std::endl;
+        
+	}
 
 	throw std::runtime_error("it works!");
 	
