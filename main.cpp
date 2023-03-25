@@ -165,65 +165,51 @@ int main(int argc, const char **argv)
 		device = physicalDevice.createDeviceUnique(createInfo);
         queue = device->getQueue(graphicsQueueIndex, 0);
 	}
-	
-	// Setup swapchain, assume a real GPU so don't bother querying the capabilities, just get what we want
-	VkExtent2D swapchain_extent = {};
-	swapchain_extent.width = win_width;
-	swapchain_extent.height = win_height;
-	const VkFormat swapchain_img_format = VK_FORMAT_B8G8R8A8_UNORM;
-
-	VkSwapchainKHR vk_swapchain = VK_NULL_HANDLE;
-	std::vector<VkImage> swapchain_images;
-	std::vector<VkImageView> swapchain_image_views;
-	{
-		VkSwapchainCreateInfoKHR create_info = {};
-		create_info.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
-		create_info.surface = vkSurface;
-		create_info.minImageCount = 2;
-		create_info.imageFormat = swapchain_img_format;
-		create_info.imageColorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
-		create_info.imageExtent = swapchain_extent;
-		create_info.imageArrayLayers = 1;
-		create_info.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
-		// We only have 1 queue
-		create_info.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
-		create_info.preTransform = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR;
-		create_info.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
-		create_info.presentMode = VK_PRESENT_MODE_FIFO_KHR;
-		create_info.clipped = true;
-		create_info.oldSwapchain = VK_NULL_HANDLE;
-		check_vulkan(vkCreateSwapchainKHR(device.get(), &create_info, nullptr, &vk_swapchain));
-
-		// Get the swap chain images
-		uint32_t num_swapchain_imgs = 0;
-		vkGetSwapchainImagesKHR(device.get(), vk_swapchain, &num_swapchain_imgs, nullptr);
-		swapchain_images.resize(num_swapchain_imgs);
-		vkGetSwapchainImagesKHR(device.get(), vk_swapchain, &num_swapchain_imgs, swapchain_images.data());
-
-		for (const auto &img : swapchain_images) 
-		{
-			VkImageViewCreateInfo view_create_info = {};
-			view_create_info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-			view_create_info.image = img;
-			view_create_info.viewType = VK_IMAGE_VIEW_TYPE_2D;
-			view_create_info.format = swapchain_img_format;
-
-			view_create_info.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
-			view_create_info.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
-			view_create_info.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
-			view_create_info.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
-
-			view_create_info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-			view_create_info.subresourceRange.baseMipLevel = 0;
-			view_create_info.subresourceRange.levelCount = 1;
-			view_create_info.subresourceRange.baseArrayLayer = 0;
-			view_create_info.subresourceRange.layerCount = 1;
-
-			VkImageView img_view;
-			check_vulkan(vkCreateImageView(device.get(), &view_create_info, nullptr, &img_view));
-			swapchain_image_views.push_back(img_view);
-		}
-	}
+    
+    // Create our swapchain
+    vk::UniqueSwapchainKHR swapchain;
+    std::vector<vk::Image> swapchainImages;
+    std::vector<vk::UniqueImageView> swapchainImageViews;
+    vk::Extent2D swapchainExtent(win_width, win_height);
+    const vk::Format format = vk::Format::eB8G8R8A8Unorm;
+    {
+        vk::SwapchainCreateInfoKHR swapchainCreateInfo(
+			{},
+			vkSurface,
+			2,
+			format,
+			vk::ColorSpaceKHR::eSrgbNonlinear,
+			swapchainExtent,
+			1,
+			vk::ImageUsageFlagBits::eColorAttachment,
+            vk::SharingMode::eExclusive,
+			{},
+			vk::SurfaceTransformFlagBitsKHR::eIdentity,
+			vk::CompositeAlphaFlagBitsKHR::eOpaque,
+			vk::PresentModeKHR::eFifo,
+			true);
+        swapchain = device->createSwapchainKHRUnique(swapchainCreateInfo);
+        
+        // Get the swapchain images
+        swapchainImages = device->getSwapchainImagesKHR(swapchain.get());
+        swapchainImageViews.reserve(swapchainImages.size());
+        for (auto&& image : swapchainImages)
+        {
+            vk::ImageViewCreateInfo imageViewCreateInfo(
+				{},
+				image,
+				vk::ImageViewType::e2D,
+				format,
+				{},
+				vk::ImageSubresourceRange(
+					vk::ImageAspectFlagBits::eColor,
+					0,
+					1,
+					0,
+					1));
+            swapchainImageViews.push_back(std::move(device->createImageViewUnique(imageViewCreateInfo)));
+        }
+    }
 
 	// Build the pipeline
 	VkPipelineLayout vk_pipeline_layout;
@@ -283,7 +269,7 @@ int main(int argc, const char **argv)
 		VkRect2D scissor = {};
 		scissor.offset.x = 0;
 		scissor.offset.y = 0;
-		scissor.extent = swapchain_extent;
+		scissor.extent = swapchainExtent;
 
 		VkPipelineViewportStateCreateInfo viewport_state_info = {};
 		viewport_state_info.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
@@ -322,7 +308,7 @@ int main(int argc, const char **argv)
 		check_vulkan(vkCreatePipelineLayout(device.get(), &pipeline_info, nullptr, &vk_pipeline_layout));
 
 		VkAttachmentDescription color_attachment = {};
-		color_attachment.format = swapchain_img_format;
+		color_attachment.format = static_cast<VkFormat>(format);
 		color_attachment.samples = VK_SAMPLE_COUNT_1_BIT;
 		color_attachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
 		color_attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
@@ -369,9 +355,9 @@ int main(int argc, const char **argv)
 
 	// Setup framebuffers
 	std::vector<VkFramebuffer> framebuffers;
-	for (const auto &v : swapchain_image_views) 
+	for (const auto &v : swapchainImageViews)
 	{
-		std::array<VkImageView, 1> attachments = { v };
+		std::array<VkImageView, 1> attachments = { v.get() };
 		VkFramebufferCreateInfo create_info = {};
 		create_info.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
 		create_info.renderPass = vk_render_pass;
@@ -420,7 +406,7 @@ int main(int argc, const char **argv)
 		render_pass_info.framebuffer = framebuffers[i];
 		render_pass_info.renderArea.offset.x = 0;
 		render_pass_info.renderArea.offset.y = 0;
-		render_pass_info.renderArea.extent = swapchain_extent;
+		render_pass_info.renderArea.extent = swapchainExtent;
 		
 		VkClearValue clear_color = { 0.f, 0.f, 0.f, 1.f };
 		render_pass_info.clearValueCount = 1;
@@ -480,7 +466,7 @@ int main(int argc, const char **argv)
 
 		// Get an image from the swap chain
 		uint32_t img_index = 0;
-		check_vulkan(vkAcquireNextImageKHR(device.get(), vk_swapchain, std::numeric_limits<uint64_t>::max(),
+		check_vulkan(vkAcquireNextImageKHR(device.get(), swapchain.get(), std::numeric_limits<uint64_t>::max(),
 			img_avail_semaphore, VK_NULL_HANDLE, &img_index));
 
 		// We need to wait for the image before we can run the commands to draw to it, and signal
@@ -503,7 +489,7 @@ int main(int argc, const char **argv)
 		check_vulkan(vkQueueSubmit(queue, 1, &submit_info, vk_fence));
 
 		// Finally, present the updated image in the swap chain
-		std::array<VkSwapchainKHR, 1> present_chain = { vk_swapchain };
+		std::array<VkSwapchainKHR, 1> present_chain = { swapchain.get() };
 		VkPresentInfoKHR present_info = {};
 		present_info.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
 		present_info.waitSemaphoreCount = signal_semaphores.size();
@@ -521,7 +507,6 @@ int main(int argc, const char **argv)
 	vkDestroySemaphore(device.get(), render_finished_semaphore, nullptr);
 	vkDestroyFence(device.get(), vk_fence, nullptr);
 	vkDestroyCommandPool(device.get(), vk_command_pool, nullptr);
-	vkDestroySwapchainKHR(device.get(), vk_swapchain, nullptr);
 	for (auto &fb : framebuffers) 
 	{
 		vkDestroyFramebuffer(device.get(), fb, nullptr);
@@ -529,10 +514,6 @@ int main(int argc, const char **argv)
 	vkDestroyPipeline(device.get(), vk_pipeline, nullptr);
 	vkDestroyRenderPass(device.get(), vk_render_pass, nullptr);
 	vkDestroyPipelineLayout(device.get(), vk_pipeline_layout, nullptr);
-	for (auto &v : swapchain_image_views) 
-	{
-		vkDestroyImageView(device.get(), v, nullptr);
-	}	
 	vkDestroySurfaceKHR(instance.get(), vkSurface, nullptr);
 
 	SDL_DestroyWindow(window);
