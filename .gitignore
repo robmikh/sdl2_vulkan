@@ -3,3 +3,6 @@
 build/
 *.dll
 *.jpg
+/.vscode
+/xcode
+.DS_Store
