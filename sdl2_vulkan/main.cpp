@@ -254,7 +254,7 @@ int main(int argc, const char **argv)
 		vk::Viewport viewport(0.0f, 0.0f, static_cast<float>(winWidth), static_cast<float>(winHeight), 0.0f, 1.0f);
 
 		// Scissor rect
-		vk::Rect2D scissor(vk::Offset2D(0.0f, 0.0f), swapchainExtent);
+		vk::Rect2D scissor(vk::Offset2D(0, 0), swapchainExtent);
 
         vk::PipelineViewportStateCreateInfo viewportStateInfo(
 			{},
@@ -397,7 +397,7 @@ int main(int argc, const char **argv)
         vk::RenderPassBeginInfo renderPassBeginInfo(
 			renderPass.get(), 
 			framebuffers[i].get(), 
-			vk::Rect2D(vk::Offset2D(0.0f, 0.0f), swapchainExtent),
+			vk::Rect2D(vk::Offset2D(0, 0), swapchainExtent),
             static_cast<uint32_t>(clearValues.size()),
 			clearValues.data());
         commandBuffer->beginRenderPass(renderPassBeginInfo, vk::SubpassContents::eInline);
