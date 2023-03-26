@@ -1,31 +1,7 @@
-#include <iostream>
-#include <vector>
-#include <string>
-#include <algorithm>
-#include <array>
-#include <sstream>
-#include <SDL.h>
-#include <SDL_syswm.h>
-#include <SDL_vulkan.h>
-#include <vulkan/vulkan.h>
+#include "pch.h"
 #include "spirv_shaders_embedded_spv.h"
-#include <vulkan/vulkan.hpp>
-
-inline void check_vulkan(vk::Result result)
-{
-	if (result != vk::Result::eSuccess)
-	{
-		throw std::runtime_error("Vulkan call failed!");
-	}
-}
-
-inline void check_sdl(SDL_bool value)
-{
-	if (value != SDL_TRUE)
-	{
-		throw std::runtime_error(SDL_GetError());
-	}
-}
+#include "VulkanSurface.h"
+#include "SDLUtils.h"
 
 int winWidth = 1280;
 int winHeight = 720;
@@ -33,27 +9,21 @@ int winHeight = 720;
 static std::string AppName    = "SDL2/Vulkan";
 static std::string EngineName = "Sample Engine";
 
-int main(int argc, const char **argv) 
+void Run()
 {
-	SDL_SetHint(SDL_HINT_FRAMEBUFFER_ACCELERATION, "1");
-	if (SDL_Init(SDL_INIT_EVERYTHING) != 0) 
-	{
-		std::cerr << "Failed to init SDL: " << SDL_GetError() << "\n";
-		return -1;
-	}
-
-	SDL_Window* window = SDL_CreateWindow("SDL2 + Vulkan",
-		SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, winWidth, winHeight, SDL_WINDOW_VULKAN);
+	SDLWindow window;
+	window.reset(SDL_CreateWindow("SDL2 + Vulkan",
+		SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, winWidth, winHeight, SDL_WINDOW_VULKAN));
 
 	// Get the required extensions
 	std::vector<const char*> extensionNames;
 	{
 		uint32_t numRequiredExtensions = 0;
-		check_sdl(SDL_Vulkan_GetInstanceExtensions(window, &numRequiredExtensions, nullptr));
+		check_sdl(SDL_Vulkan_GetInstanceExtensions(window.get(), &numRequiredExtensions, nullptr));
 
 		extensionNames = std::vector<const char*>(static_cast<size_t>(numRequiredExtensions), nullptr);
 
-		check_sdl(SDL_Vulkan_GetInstanceExtensions(window, &numRequiredExtensions, extensionNames.data()));
+		check_sdl(SDL_Vulkan_GetInstanceExtensions(window.get(), &numRequiredExtensions, extensionNames.data()));
 
 		extensionNames.emplace_back(VK_KHR_SURFACE_EXTENSION_NAME);
 		extensionNames.emplace_back(VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME);
@@ -83,8 +53,7 @@ int main(int argc, const char **argv)
 		instance = vk::createInstanceUnique(instanceCreateInfo);
 	}
 
-	VkSurfaceKHR vkSurface = VK_NULL_HANDLE;
-	check_sdl(SDL_Vulkan_CreateSurface(window, instance.get(), &vkSurface));
+	VulkanSurface surface(instance.get(), window.get());
 
 	// Select a physical device
 	vk::PhysicalDevice physicalDevice;
@@ -134,7 +103,7 @@ int main(int argc, const char **argv)
         for (uint32_t i = 0; i < queueFamilyProperties.size(); i++)
         {
             auto&& properties = queueFamilyProperties[i];
-            auto presentSupport = physicalDevice.getSurfaceSupportKHR(i, vkSurface);
+            auto presentSupport = physicalDevice.getSurfaceSupportKHR(i, surface.get());
             if (presentSupport && properties.queueFlags & vk::QueueFlagBits::eGraphics)
             {
                 graphicsQueueIndex = i;
@@ -179,7 +148,7 @@ int main(int argc, const char **argv)
     {
         vk::SwapchainCreateInfoKHR swapchainCreateInfo(
 			{},
-			vkSurface,
+			surface.get(),
 			2,
 			format,
 			vk::ColorSpaceKHR::eSrgbNonlinear,
@@ -453,7 +422,7 @@ int main(int argc, const char **argv)
 				done = true;
 			}
 			if (event.type == SDL_WINDOWEVENT && event.window.event == SDL_WINDOWEVENT_CLOSE
-					&& event.window.windowID == SDL_GetWindowID(window)) 
+					&& event.window.windowID == SDL_GetWindowID(window.get())) 
 			{
 				done = true;
 			}
@@ -501,10 +470,19 @@ int main(int argc, const char **argv)
 		// Wait for the frame to finish
         check_vulkan(device->waitForFences(fence.get(), true, std::numeric_limits<uint64_t>::max()));
 	}
+}
 
-	vkDestroySurfaceKHR(instance.get(), vkSurface, nullptr);
+int main(int argc, const char **argv) 
+{
+	SDL_SetHint(SDL_HINT_FRAMEBUFFER_ACCELERATION, "1");
+	if (SDL_Init(SDL_INIT_EVERYTHING) != 0) 
+	{
+		std::cerr << "Failed to init SDL: " << SDL_GetError() << "\n";
+		return -1;
+	}
 
-	SDL_DestroyWindow(window);
+	Run();
+
 	SDL_Quit();
 
 	return 0;

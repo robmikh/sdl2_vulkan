@@ -6,7 +6,7 @@ find_package(Vulkan REQUIRED)
 
 add_spirv_embed_library(spirv_shaders vert.vert frag.frag)
 
-add_executable(sdl2_vulkan main.cpp)
+add_executable(sdl2_vulkan pch.cpp main.cpp)
 
 set_target_properties(sdl2_vulkan PROPERTIES
 	CXX_STANDARD 17
