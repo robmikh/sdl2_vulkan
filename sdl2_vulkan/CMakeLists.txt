@@ -9,7 +9,7 @@ add_spirv_embed_library(spirv_shaders vert.vert frag.frag)
 add_executable(sdl2_vulkan main.cpp)
 
 set_target_properties(sdl2_vulkan PROPERTIES
-	CXX_STANDARD 14
+	CXX_STANDARD 17
 	CXX_STANDARD_REQUIRED ON)
 
 target_compile_options(sdl2_vulkan PRIVATE

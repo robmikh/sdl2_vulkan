@@ -11,6 +11,14 @@
 #include "spirv_shaders_embedded_spv.h"
 #include <vulkan/vulkan.hpp>
 
+inline void check_vulkan(vk::Result result)
+{
+	if (result != vk::Result::eSuccess)
+	{
+		throw std::runtime_error("Vulkan call failed!");
+	}
+}
+
 inline void check_sdl(SDL_bool value)
 {
 	if (value != SDL_TRUE)
@@ -482,11 +490,10 @@ int main(int argc, const char **argv)
             signalSemaphores,
             presentChain,
             imgIndex);
-        auto result = queue.presentKHR(presentInfo);
-        assert(result == vk::Result::eSuccess);
+        check_vulkan(queue.presentKHR(presentInfo));
         
 		// Wait for the frame to finish
-        device->waitForFences(fence.get(), true, std::numeric_limits<uint64_t>::max());
+        check_vulkan(device->waitForFences(fence.get(), true, std::numeric_limits<uint64_t>::max()));
 	}
 
 	vkDestroySurfaceKHR(instance.get(), vkSurface, nullptr);
