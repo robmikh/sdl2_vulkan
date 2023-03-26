@@ -59,6 +59,13 @@ int main(int argc, const char **argv)
 		extensionNames.emplace_back(VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME);
 	}
 
+	// Get validation layers
+	// TODO: Make runtime configurable
+	const std::vector<const char*> validationLayers = 
+	{
+		"VK_LAYER_KHRONOS_validation"
+	};
+
 	// Create the Vulkan instance
 	vk::UniqueInstance instance;
 	{
@@ -68,8 +75,8 @@ int main(int argc, const char **argv)
 		vk::InstanceCreateInfo instanceCreateInfo(
 			vk::InstanceCreateFlags(vk::InstanceCreateFlagBits::eEnumeratePortabilityKHR), 
 			&applicationInfo,
-			0,
-			nullptr,
+			static_cast<uint32_t>(validationLayers.size()),
+			validationLayers.data(),
 			extensionCount,
 			extensionNames.data());
 
@@ -84,7 +91,6 @@ int main(int argc, const char **argv)
 	{
 		auto devices = instance->enumeratePhysicalDevices();
 		std::cout << "Found " << devices.size() << " devices." << std::endl;
-        
         
 		const bool hasDiscreteGpu = std::find_if(devices.begin(), devices.end(),
 		[](auto&& device)
@@ -155,8 +161,8 @@ int main(int argc, const char **argv)
 			{}, 
 			1, 
 			&queueCreateInfo, 
-			{}, 
-			{}, 
+			static_cast<uint32_t>(validationLayers.size()),
+			validationLayers.data(),
 			static_cast<uint32_t>(deviceExtensions.size()), 
 			deviceExtensions.data(), 
 			&deviceFeatures);
