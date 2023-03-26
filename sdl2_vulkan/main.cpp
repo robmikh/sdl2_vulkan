@@ -1,6 +1,6 @@
 #include "pch.h"
 #include "spirv_shaders_embedded_spv.h"
-#include "VulkanSurface.h"
+#include "VulkanUtils.h"
 #include "SDLUtils.h"
 
 int winWidth = 1280;
@@ -8,6 +8,12 @@ int winHeight = 720;
 
 static std::string AppName    = "SDL2/Vulkan";
 static std::string EngineName = "Sample Engine";
+
+struct Vertex
+{
+	glm::vec3 Position;
+	glm::vec3 Color;
+};
 
 void Run()
 {
@@ -57,6 +63,7 @@ void Run()
 
 	// Select a physical device
 	vk::PhysicalDevice physicalDevice;
+	vk::PhysicalDeviceMemoryProperties physicalDeviceMemoryProperties;
 	{
 		auto devices = instance->enumeratePhysicalDevices();
 		std::cout << "Found " << devices.size() << " devices." << std::endl;
@@ -92,6 +99,8 @@ void Run()
         {
             throw std::runtime_error("No suitable physical device found!");
         }
+
+		physicalDeviceMemoryProperties = physicalDevice.getMemoryProperties();
 	}
 
 	// Create the device and queue
@@ -183,6 +192,170 @@ void Run()
             swapchainImageViews.push_back(std::move(device->createImageViewUnique(imageViewCreateInfo)));
         }
     }
+
+	// Setup the command pool
+    vk::UniqueCommandPool commandPool;
+    {
+        vk::CommandPoolCreateInfo createInfo(
+			{},
+			graphicsQueueIndex);
+        commandPool = device->createCommandPoolUnique(createInfo);
+    }
+
+	// We use a fence to wait for the rendering work to finish
+    vk::UniqueFence fence;
+    {
+        vk::FenceCreateInfo info;
+        fence = device->createFenceUnique(info);
+    }
+
+	// Vertex and index data
+	const std::vector<Vertex> vertices = 
+	{
+		{ {  0.0f, -0.5f, 0.0f }, { 1.0f, 0.0f, 0.0f } },
+		{ {  0.5f,  0.5f, 0.0f }, { 0.0f, 1.0f, 0.0f } },
+		{ { -0.5f,  0.5f, 0.0f }, { 0.0f, 0.0f, 1.0f } },
+	};
+	const std::vector<uint16_t> indices = 
+	{
+		0, 1, 2,
+	};
+
+	// Create vertex and index buffers
+	vk::UniqueBuffer vertexBuffer;
+	vk::UniqueDeviceMemory vertexBufferMemory;
+	vk::UniqueBuffer indexBuffer;
+	vk::UniqueDeviceMemory indexBufferMemory;
+	{	
+		// Vertex buffers
+
+		uint64_t vertexBufferSize = static_cast<uint64_t>(vertices.size() * sizeof(Vertex));
+
+		// Create a staging buffer and allocate memory for it
+		vk::BufferCreateInfo vertexStagingBufferCreateInfo(
+			{},
+			vertexBufferSize,
+			vk::BufferUsageFlagBits::eTransferSrc,
+			vk::SharingMode::eExclusive,
+			1,
+			&graphicsQueueIndex);
+		vk::UniqueBuffer vertexStagingBuffer = device->createBufferUnique(vertexStagingBufferCreateInfo);
+
+		auto vertexStagingBufferMemoryRequirements = device->getBufferMemoryRequirements(vertexStagingBuffer.get());
+		uint32_t memoryTypeIndex = FindMemoryType(
+			physicalDeviceMemoryProperties, 
+			vertexStagingBufferMemoryRequirements.memoryTypeBits, 
+			vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent);
+		vk::UniqueDeviceMemory vertexStagingMemory = device->allocateMemoryUnique(vk::MemoryAllocateInfo(vertexStagingBufferMemoryRequirements.size, memoryTypeIndex));
+
+		// Copy our vertex data to the staging buffer
+		{
+			uint8_t* stagingMemory = static_cast<uint8_t*>(device->mapMemory(vertexStagingMemory.get(), 0, vertexStagingBufferMemoryRequirements.size));
+			memcpy(stagingMemory, vertices.data(), vertexBufferSize);
+			device->unmapMemory(vertexStagingMemory.get());
+		}
+		device->bindBufferMemory(vertexStagingBuffer.get(), vertexStagingMemory.get(), 0);
+
+		// Create our actual vertex buffer
+		vk::BufferCreateInfo vertexBufferCreateInfo(
+			{},
+			vertexBufferSize,
+			vk::BufferUsageFlagBits::eVertexBuffer | vk::BufferUsageFlagBits::eTransferDst,
+			vk::SharingMode::eExclusive,
+			1,
+			&graphicsQueueIndex);
+		vertexBuffer = device->createBufferUnique(vertexBufferCreateInfo);
+
+		auto vertexBufferMemoryRequirements = device->getBufferMemoryRequirements(vertexBuffer.get());
+		memoryTypeIndex = FindMemoryType(
+			physicalDeviceMemoryProperties, 
+			vertexBufferMemoryRequirements.memoryTypeBits, 
+			vk::MemoryPropertyFlagBits::eDeviceLocal);
+		vertexBufferMemory = device->allocateMemoryUnique(vk::MemoryAllocateInfo(vertexBufferMemoryRequirements.size, memoryTypeIndex));
+		device->bindBufferMemory(vertexBuffer.get(), vertexBufferMemory.get(), 0);
+
+		// Index buffers
+
+		uint64_t indexBufferSize = static_cast<uint64_t>(vertices.size() * sizeof(Vertex));
+
+		// Create a staging buffer and allocate memory for it
+		vk::BufferCreateInfo indexStagingBufferCreateInfo(
+			{},
+			indexBufferSize,
+			vk::BufferUsageFlagBits::eTransferSrc,
+			vk::SharingMode::eExclusive,
+			1,
+			&graphicsQueueIndex);
+		vk::UniqueBuffer indexStagingBuffer = device->createBufferUnique(indexStagingBufferCreateInfo);
+
+		auto indexStagingBufferMemoryRequirements = device->getBufferMemoryRequirements(indexStagingBuffer.get());
+		memoryTypeIndex = FindMemoryType(
+			physicalDeviceMemoryProperties, 
+			indexStagingBufferMemoryRequirements.memoryTypeBits, 
+			vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent);
+		vk::UniqueDeviceMemory indexStagingMemory = device->allocateMemoryUnique(vk::MemoryAllocateInfo(indexStagingBufferMemoryRequirements.size, memoryTypeIndex));
+
+		// Copy our index data to the staging buffer
+		{
+			uint8_t* stagingMemory = static_cast<uint8_t*>(device->mapMemory(indexStagingMemory.get(), 0, indexStagingBufferMemoryRequirements.size));
+			memcpy(stagingMemory, indices.data(), indexBufferSize);
+			device->unmapMemory(indexStagingMemory.get());
+		}
+		device->bindBufferMemory(indexStagingBuffer.get(), indexStagingMemory.get(), 0);
+
+		// Create our actual index buffer
+		vk::BufferCreateInfo indexBufferCreateInfo(
+			{},
+			indexBufferSize,
+			vk::BufferUsageFlagBits::eIndexBuffer | vk::BufferUsageFlagBits::eTransferDst,
+			vk::SharingMode::eExclusive,
+			1,
+			&graphicsQueueIndex);
+		indexBuffer = device->createBufferUnique(indexBufferCreateInfo);
+
+		auto indexBufferMemoryRequirements = device->getBufferMemoryRequirements(indexBuffer.get());
+		memoryTypeIndex = FindMemoryType(
+			physicalDeviceMemoryProperties, 
+			indexBufferMemoryRequirements.memoryTypeBits, 
+			vk::MemoryPropertyFlagBits::eDeviceLocal);
+		indexBufferMemory = device->allocateMemoryUnique(vk::MemoryAllocateInfo(indexBufferMemoryRequirements.size, memoryTypeIndex));
+		device->bindBufferMemory(indexBuffer.get(), indexBufferMemory.get(), 0);
+
+		// Allocate a command buffer
+		vk::UniqueCommandBuffer copyCommandBuffer;
+		{
+			vk::CommandBufferAllocateInfo info(
+				commandPool.get(),
+				vk::CommandBufferLevel::ePrimary,
+				1);
+			auto buffers = device->allocateCommandBuffersUnique(info);
+			copyCommandBuffer = std::move(buffers[0]);
+		}
+
+		// Copy our staging buffers to our vertex and index buffers
+		copyCommandBuffer->begin(vk::CommandBufferBeginInfo(vk::CommandBufferUsageFlagBits::eOneTimeSubmit));
+
+		copyCommandBuffer->copyBuffer(vertexStagingBuffer.get(), vertexBuffer.get(), 1, &vk::BufferCopy(0, 0, vertexBufferSize));
+		copyCommandBuffer->copyBuffer(indexStagingBuffer.get(), indexBuffer.get(), 1, &vk::BufferCopy(0, 0, indexBufferSize));
+
+		copyCommandBuffer->end();
+
+		// Submit our commands
+		const std::vector<vk::Fence> fences =
+        {
+            fence.get()
+        };
+        device->resetFences(fences);
+
+		const std::vector<vk::CommandBuffer> copyCommands = { copyCommandBuffer.get() };
+		vk::SubmitInfo submitInfo(
+			{},
+			{},
+			copyCommands);
+		queue.submit(submitInfo, fence.get());
+
+		check_vulkan(device->waitForFences(fence.get(), true, std::numeric_limits<uint64_t>::max()));
+	}
     
     // Build the pipeline
     vk::UniquePipelineLayout pipelineLayout;
@@ -224,14 +397,25 @@ void Run()
 			fragmentStage
 		};
 
-		// TODO: Don't hardcode vertices
-		vk::PipelineVertexInputStateCreateInfo vertexInputInfo;
+		// Vertex layout
+		const std::vector<vk::VertexInputBindingDescription> vertexBindingDescriptions = 
+		{
+			vk::VertexInputBindingDescription(0, sizeof(Vertex))
+		};
+		const std::vector<vk::VertexInputAttributeDescription> vertexAttributeDescriptions = 
+		{
+			vk::VertexInputAttributeDescription(0, 0, vk::Format::eR32G32B32Sfloat, 0),
+			vk::VertexInputAttributeDescription(1, 0, vk::Format::eR32G32B32Sfloat, sizeof(glm::vec3)),
+		};
+		vk::PipelineVertexInputStateCreateInfo vertexInputInfo(
+			{},
+			vertexBindingDescriptions,
+			vertexAttributeDescriptions);
 
 		// Primitive type
 		vk::PipelineInputAssemblyStateCreateInfo inputAssembly(
 			{},
-			vk::PrimitiveTopology::eTriangleList,
-			false);
+			vk::PrimitiveTopology::eTriangleList);
         
 		// Viewport
 		vk::Viewport viewport(0.0f, 0.0f, static_cast<float>(winWidth), static_cast<float>(winHeight), 0.0f, 1.0f);
@@ -253,7 +437,11 @@ void Run()
 			vk::PolygonMode::eFill,
 			vk::CullModeFlagBits::eBack,
 			vk::FrontFace::eClockwise,
-			false);
+			false,
+			0.0f,
+			0.0f,
+			0.0f,
+			1.0f);
 
 		vk::PipelineMultisampleStateCreateInfo multisampling(
 			{},
@@ -274,8 +462,7 @@ void Run()
 			{},
 			false,
 			vk::LogicOp::eClear,
-			1,
-			&blendMode);
+			{ blendMode });
 
 		vk::PipelineLayoutCreateInfo pipelineInfo;
 		pipelineLayout = device->createPipelineLayoutUnique(pipelineInfo);
@@ -308,13 +495,10 @@ void Run()
 			1,
 			&subpass);
         renderPass = device->createRenderPassUnique(renderPassInfo);
-        
-		pipelineCache = device->createPipelineCacheUnique(vk::PipelineCacheCreateInfo());
 
         vk::GraphicsPipelineCreateInfo graphicsPipelineInfo(
 			{},
-			2,
-			shaderStages.data(),
+			shaderStages,
 			&vertexInputInfo,
 			&inputAssembly,
 			nullptr,
@@ -327,6 +511,7 @@ void Run()
 			pipelineLayout.get(),
 			renderPass.get(),
 			0);
+		pipelineCache = device->createPipelineCacheUnique(vk::PipelineCacheCreateInfo());
         pipeline = device->createGraphicsPipelineUnique(pipelineCache.get(), graphicsPipelineInfo).value;
     }
     
@@ -347,15 +532,7 @@ void Run()
         framebuffers.push_back(std::move(device->createFramebufferUnique(createInfo)));
     }
     
-	// Setup the command pool
-    vk::UniqueCommandPool commandPool;
-    {
-        vk::CommandPoolCreateInfo createInfo(
-			{},
-			graphicsQueueIndex);
-        commandPool = device->createCommandPoolUnique(createInfo);
-    }
-
+	// Allocate render command buffers
     std::vector<vk::UniqueCommandBuffer> commandBuffers;
     {
         vk::CommandBufferAllocateInfo info(
@@ -366,6 +543,8 @@ void Run()
     }
     
     // Now record the rendering commands
+	const std::vector<vk::Buffer> vertexBuffers = { vertexBuffer.get() };
+	const std::vector<vk::DeviceSize> vertexBufferOffsets = { 0 };
     for (size_t i = 0; i < commandBuffers.size(); i++)
     {
         auto&& commandBuffer = commandBuffers[i];
@@ -385,7 +564,9 @@ void Run()
 			clearValues.data());
         commandBuffer->beginRenderPass(renderPassBeginInfo, vk::SubpassContents::eInline);
         commandBuffer->bindPipeline(vk::PipelineBindPoint::eGraphics, pipeline.get());
-        commandBuffer->draw(3, 1, 0, 0);
+		commandBuffer->bindVertexBuffers(0, vertexBuffers, vertexBufferOffsets);
+		commandBuffer->bindIndexBuffer(indexBuffer.get(), 0, vk::IndexType::eUint16);
+        commandBuffer->drawIndexed(static_cast<uint32_t>(indices.size()), 1, 0, 0, 0);
         commandBuffer->endRenderPass();
         
         commandBuffer->end();
@@ -397,13 +578,6 @@ void Run()
         vk::SemaphoreCreateInfo info;
         imgAvailSemaphore = device->createSemaphoreUnique(info);
         renderFinishedSemaphore = device->createSemaphoreUnique(info);
-    }
-
-	// We use a fence to wait for the rendering work to finish
-    vk::UniqueFence fence;
-    {
-        vk::FenceCreateInfo info;
-        fence = device->createFenceUnique(info);
     }
 
 	std::cout << "Running loop\n";

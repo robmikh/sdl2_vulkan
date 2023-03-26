@@ -17,6 +17,10 @@
 #include <vulkan/vulkan.h>
 #include <vulkan/vulkan.hpp>
 
+// GLM
+#include <glm/glm.hpp>
+#include <glm/vec3.hpp>
+
 // Result helpers
 inline void check_vulkan(vk::Result result)
 {
