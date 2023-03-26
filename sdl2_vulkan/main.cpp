@@ -335,8 +335,10 @@ void Run()
 		// Copy our staging buffers to our vertex and index buffers
 		copyCommandBuffer->begin(vk::CommandBufferBeginInfo(vk::CommandBufferUsageFlagBits::eOneTimeSubmit));
 
-		copyCommandBuffer->copyBuffer(vertexStagingBuffer.get(), vertexBuffer.get(), 1, &vk::BufferCopy(0, 0, vertexBufferSize));
-		copyCommandBuffer->copyBuffer(indexStagingBuffer.get(), indexBuffer.get(), 1, &vk::BufferCopy(0, 0, indexBufferSize));
+        vk::BufferCopy vertexBufferCopy(0, 0, vertexBufferSize);
+		copyCommandBuffer->copyBuffer(vertexStagingBuffer.get(), vertexBuffer.get(), 1, &vertexBufferCopy);
+        vk::BufferCopy indexBufferCopy(0, 0, indexBufferSize);
+        copyCommandBuffer->copyBuffer(indexStagingBuffer.get(), indexBuffer.get(), 1, &indexBufferCopy);
 
 		copyCommandBuffer->end();
 
@@ -462,7 +464,8 @@ void Run()
 			{},
 			false,
 			vk::LogicOp::eClear,
-			{ blendMode });
+            1,
+			&blendMode);
 
 		vk::PipelineLayoutCreateInfo pipelineInfo;
 		pipelineLayout = device->createPipelineLayoutUnique(pipelineInfo);

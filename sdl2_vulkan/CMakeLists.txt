@@ -3,6 +3,7 @@ cmake_minimum_required(VERSION 3.21)
 find_package(Threads REQUIRED)
 find_package(SDL2 REQUIRED)
 find_package(Vulkan REQUIRED)
+find_package(GLM REQUIRED)
 
 add_spirv_embed_library(spirv_shaders vert.vert frag.frag)
 
@@ -17,7 +18,8 @@ target_compile_options(sdl2_vulkan PRIVATE
     )
 
 target_include_directories(sdl2_vulkan PUBLIC
-	$<BUILD_INTERFACE:${SDL2_INCLUDE_DIR}>)
+	$<BUILD_INTERFACE:${SDL2_INCLUDE_DIR}>
+	$<BUILD_INTERFACE:${GLM_INCLUDE_DIR}>)
 
 target_link_libraries(sdl2_vulkan PUBLIC
 	spirv_shaders Vulkan::Vulkan ${SDL2_LIBRARY})
